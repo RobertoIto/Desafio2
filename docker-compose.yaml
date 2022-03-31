@@ -1,0 +1,92 @@
+# Versão do docker compose
+version: '3'
+
+# Serviços, no caso os containers node e nginx
+services:
+  node:
+    build:
+      context: ./node
+    image: robertohito/node:latest
+    container_name: node
+    # O dockerize está dando erro, então utilizei o node.depends_on 
+    # com rhidb.healthcheck. 
+    # entrypoint: dockerize -wait tcp://localhost:3306
+    # entrypoint: dockerize -wait tcp://rhidb:3306
+    networks:
+      - nodenet
+    # ports: 
+    #   - "3000:3000"
+    expose:
+      - "3000"
+    depends_on:
+      rhidb:
+        condition: service_healthy
+
+  nginx:
+    build: 
+      context: ./nginx
+    image: robertohito/nginx:latest
+    container_name: nginx
+    networks:
+      - nodenet
+    ports:
+      - "8080:8080"
+
+  # imagem 5.7. O nome do banco de dados será rhidb.
+  # Se cair o banco irá reiniciar automaticamente.
+  # tty libera o console para escrita.
+  # O volume irá replicar o banco de dados no nosso
+  # hd local determinado pelo caminho.
+  # Environment define as variáveis de ambiente do
+  # banco de dados.
+  # Outro ponto importante é a definição da rede
+  # utilizada pelo container.
+  rhidb:
+    image: mysql:5.7.16
+    command: --innodb-use-native-aio=0 #--initialize
+    container_name: rhidb
+    restart: always
+    tty: true
+    # Para evitar o erro "[ERROR] --initialize specified 
+    # but the data directory has files in it. Aborting", 
+    # o diretório do /var/lib/mysql deve estar vazio, 
+    # ou utilize um diretório diferente como /var/lib/mysql1.
+    # Ou, no caso, utilizamos o mysql:5.7.16, este funcionou
+    # e os arquivos foram criados e gerados dentro do 
+    # volume mapeado. E foi preciso criar um usuário para conexão, 
+    # diferente de root, via console mysql.
+    volumes:
+      - ./mysql:/var/lib/mysql # Disco Local
+      #- mysql:/var/lib/mysql # volume do docker
+    environment:
+      - MYSQL_DATABASE=desafio2
+      - MYSQL_ROOT_PASSWORD=root
+    #  - MYSQL_USER=root
+    # Usando a variável MYSQL_USER=root causa um erro que pode
+    # ser visualizado nos logs e na errata abaixo.
+    networks:
+      - nodenet
+    # A porta 3306 é liberada no localhost, somente se for utilizado
+    # uma ferramenta externa, como o MySQL Workbench para acessar
+    # o banco de dados. No caso, ele vai ser acessado pela rede
+    # nodenet. 
+    ports: 
+      - "3306:3306"
+    expose:
+      - "3306"
+    # O health check é utilizado em conjunto com o depends_on no
+    # outro servidor, no caso, o dockerize não funcionou corretamente.
+    healthcheck:
+      test: "/usr/bin/mysql --user=rito --password=rito --execute \"SHOW DATABASES;\""
+      interval: 2s
+      timeout: 20s
+      retries: 10
+
+# É preciso selecionar as redes envolvidas
+networks:
+  nodenet:
+    driver: bridge
+
+# Criar os volumes utilizados
+# volumes:
+#   mysql:
