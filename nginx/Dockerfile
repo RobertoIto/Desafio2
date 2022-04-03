@@ -6,4 +6,3 @@ RUN rm /etc/nginx/conf.d/default.conf
 # Copia o nosso arquivo de configuração para o 
 # diretório de configuração do nginx.
 COPY nginx.conf /etc/nginx/conf.d
-
